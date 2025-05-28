@@ -23,7 +23,7 @@
 - Чтобы протестировать работу fallback метода в user-service:
     1. Запускаем все миркосервисы
     2. проверяем что подача запроса (например GET http://localhost:8080/api/users) user-service работает
-    3. (На windows) Останавливаем службу postgresql
+    3. (На windows) Останавливаем службу postgresql (через services.msc или диспетчер задач)
     4. Сразу после этого при постоянном вызове методов user-service наблюдаем работу fallback методов user-service
 # Требования к проекту
 Добавить к существующей системе паттерны: gateway api, service discovery, circuit breaker, 
