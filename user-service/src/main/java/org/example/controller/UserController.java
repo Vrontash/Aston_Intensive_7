@@ -1,5 +1,6 @@
 package org.example.controller;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.example.annotations.swagger.*;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
@@ -32,6 +34,7 @@ public class UserController {
     @UserBadRequest //Кастомная аннотация для документации метода с не пройденной валидацией
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)//Код 201
+    @CircuitBreaker(name = "userService", fallbackMethod = "returnUserFallback")
     public EntityModel<UserDto> saveUser(@Valid @RequestBody UserDto userDto){
         return EntityModel.of(userService.saveUser(userDto),
                                 getSelfLink(userDto.getId()),
@@ -44,6 +47,7 @@ public class UserController {
     @OkFindUserResponse //Кастомная аннотация для документации метода с успешной работой над User'ом
     @UserNotFoundResponse //Кастомная аннотация для документации метода с не найденным User'ом
     @GetMapping("/{id}")
+    @CircuitBreaker(name = "userService", fallbackMethod = "returnUserFallback")
     public EntityModel<UserDto> findUserById(@PathVariable("id") Long id){
         return EntityModel.of(userService.findUserById(id),
                                 getSelfLink(id),
@@ -55,6 +59,7 @@ public class UserController {
     @Operation(summary = "Get all users", description = "Returns all users")
     @OkFindUsersResponse //Кастомная аннотация для документации метода с успешной работой поиска всех User'ов
     @GetMapping
+    @CircuitBreaker(name = "userService", fallbackMethod = "returnUsersFallback")
     public CollectionModel<EntityModel<UserDto>> findAllUsers(){
         //Добавление каждому UserDto в Users нужных ссылок
         List<EntityModel<UserDto>> users = userService.findAllUsers().stream()
@@ -73,6 +78,7 @@ public class UserController {
     @UserNotFoundResponse
     @UserBadRequest
     @PutMapping
+    @CircuitBreaker(name = "userService", fallbackMethod = "returnUserFallback")
     public EntityModel<UserDto> updateUser(@Valid @RequestBody UserDto userDto){
         return EntityModel.of(userService.updateUser(userDto),
                                 getSelfLink(userDto.getId()),
@@ -85,6 +91,7 @@ public class UserController {
     @UserNotFoundResponse
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)//Код 204
+    @CircuitBreaker(name = "userService", fallbackMethod = "returnEntityFallback")
     public ResponseEntity<Void> deleteUser(@PathVariable("id") Long id){
         userService.deleteUser(id);
         return ResponseEntity.noContent().header(HttpHeaders.LINK, getUsersLink().toString()).build();
@@ -104,5 +111,17 @@ public class UserController {
     }
     private Link getCreateLink(UserDto userDto){
         return linkTo(methodOn(UserController.class).saveUser(userDto)).withRel("save").withType("POST");
+    }
+    private EntityModel<UserDto> returnUserFallback(Exception e){
+        return EntityModel.of(new UserDto(0L, "Service unavailable","", 503, LocalDateTime.now()));
+    }
+    private ResponseEntity<Void> returnEntityFallback(Exception e){
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header(HttpHeaders.LINK, getUsersLink().toString()).build();
+    }
+    private CollectionModel<EntityModel<UserDto>> returnUsersFallback(Exception e){
+        List<EntityModel<UserDto>> users = List.of(EntityModel.of(new UserDto(0L, "Service unavailable","", 503, LocalDateTime.now())));
+        return CollectionModel.of(users,
+                getUsersLink().withSelfRel(),
+                getCreateLink(new UserDto()));
     }
 }
